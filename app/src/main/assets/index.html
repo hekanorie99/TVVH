@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>TVVH</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#0b0b12;color:#eee;font-family:system-ui,sans-serif;padding-bottom:40px}
+.top{position:sticky;top:0;background:#0b0b12;padding:14px 16px 8px;z-index:5;border-bottom:1px solid #1d1d2b}
+.row{display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:22px;font-weight:800;letter-spacing:3px;color:#7c5cff}
+.bal{font-size:18px;font-weight:700;color:#4ade80}
+.tabs{display:flex;gap:8px;margin-top:10px}
+.tab{flex:1;padding:10px;text-align:center;border-radius:10px;background:#161622;color:#999;font-weight:600}
+.tab.on{background:#7c5cff;color:#fff}
+.wrap{padding:16px}
+.card{background:#14141f;border:2px solid #2a2a3d;border-radius:18px;padding:22px 16px;text-align:center}
+.num{font-size:28px;font-weight:800;letter-spacing:1px;margin:10px 0}
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:700;font-size:13px;margin:3px}
+.price{font-size:24px;font-weight:800;color:#4ade80;margin:12px 0 4px}
+.sub{color:#888;font-size:13px}
+.btn{width:100%;padding:15px;border:0;border-radius:14px;font-size:16px;font-weight:700;color:#fff;background:#7c5cff;margin-top:12px}
+.btn.g{background:#16a34a}.btn.o{background:#2a2a3d}.btn.r{background:#b91c1c}
+.btns{display:flex;gap:10px}.btns .btn{flex:1}
+.stats{display:flex;gap:8px;margin-top:16px}
+.st{flex:1;background:#14141f;border-radius:12px;padding:10px;text-align:center}
+.st b{display:block;font-size:16px;color:#fff}.st span{font-size:11px;color:#888}
+.item{background:#14141f;border-left:4px solid #444;border-radius:12px;padding:12px;margin-top:10px}
+.item .n{font-weight:800;font-size:17px}
+.item .btn{padding:9px;font-size:14px;margin-top:8px}
+select{width:100%;padding:11px;background:#161622;color:#eee;border:1px solid #2a2a3d;border-radius:10px;margin-top:12px;font-size:15px}
+.empty{text-align:center;color:#666;margin-top:50px}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="row"><div class="logo">TVVH</div><div class="bal" id="bal"></div></div>
+  <div class="tabs">
+    <div class="tab on" id="t1" onclick="tab(1)">Генератор</div>
+    <div class="tab" id="t2" onclick="tab(2)">Каталог</div>
+  </div>
+</div>
+
+<div class="wrap" id="p1">
+  <div class="card" id="card"></div>
+  <button class="btn" onclick="gen()">🎲 Генерировать номер</button>
+  <div id="acts" class="btns hide">
+    <button class="btn o" onclick="toCat()">📁 В каталог</button>
+    <button class="btn g" onclick="sellCur()">💰 Продать</button>
+  </div>
+  <div class="stats">
+    <div class="st"><b id="sg">0</b><span>сгенерировано</span></div>
+    <div class="st"><b id="ss">0</b><span>продано</span></div>
+    <div class="st"><b id="sc">0</b><span>в каталоге</span></div>
+  </div>
+</div>
+
+<div class="wrap hide" id="p2">
+  <div class="card" style="padding:14px">
+    <div class="sub">Стоимость коллекции</div>
+    <div class="price" id="cv" style="margin:4px 0 0"></div>
+  </div>
+  <select id="sort" onchange="lim=50;renderCat()">
+    <option value="new">Сначала новые</option>
+    <option value="price">Сначала дорогие</option>
+    <option value="rar">По редкости</option>
+  </select>
+  <button class="btn r" onclick="sellCommon()">Продать все обычные</button>
+  <div id="list"></div>
+  <button class="btn o hide" id="more" onclick="lim+=50;renderCat()">Показать ещё</button>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const rnd=n=>Math.floor(Math.random()*n);
+const rd=n=>{let s='';for(let i=0;i<n;i++)s+=rnd(10);return s};
+const rev=s=>[...s].reverse().join('');
+
+const OPS={
+  'Yota':{c:'#00a0ff',m:1.0,codes:['999','995','996','997']},
+  'Tele2':{c:'#e5e5e5',m:1.0,codes:['900','901','950','952','951']},
+  'MTS':{c:'#ff3b3b',m:1.1,codes:['910','911','915','916','917','985']},
+  'МегаФон':{c:'#00c853',m:1.1,codes:['920','926','929','931','925']},
+  'Билайн':{c:'#ffcc00',m:1.05,codes:['903','905','909','963','960']},
+  'Ростелеком':{c:'#a855f7',m:0.95,codes:['958','991','992','993']}
+};
+const OPK=Object.keys(OPS);
+const RAR=[[8,'Обычный','#9aa0a6'],[25,'Необычный','#4ade80'],[60,'Редкий','#38bdf8'],[140,'Эпический','#c084fc'],[300,'Легендарный','#fbbf24'],[1e9,'Мифический','#f43f5e']];
+const rarIdx=sc=>RAR.findIndex(r=>sc<r[0]);
+
+function makeSub(){
+  let s=rd(7);
+  if(Math.random()<0.55)return s;
+  const t=Math.random();
+  if(t<0.30){
+    const k=Math.random()<0.6?3:Math.random()<0.6?4:Math.random()<0.6?5:Math.random()<0.6?6:7;
+    const pos=rnd(8-k);
+    s=s.slice(0,pos)+String(rnd(10)).repeat(k)+s.slice(pos+k);
+  }else if(t<0.50){
+    const k=Math.random()<0.5?2:Math.random()<0.5?3:4;
+    s=s.slice(0,7-k)+'0'.repeat(k);
+  }else if(t<0.68){
+    const k=Math.random()<0.5?4:Math.random()<0.6?5:Math.random()<0.6?6:7;
+    const asc=Math.random()<0.5;
+    const st=asc?rnd(10-k+1):(k-1)+rnd(10-k+1);
+    let q='';for(let i=0;i<k;i++)q+=asc?st+i:st-i;
+    const pos=rnd(8-k);
+    s=s.slice(0,pos)+q+s.slice(pos+k);
+  }else if(t<0.80){
+    const h=rd(3);s=h+rnd(10)+rev(h);
+  }else if(t<0.90){
+    const a=rnd(10),b=rnd(10);s=rnd(10)+(''+a+b).repeat(3);
+  }else if(t<0.96){
+    s=rnd(10)+''+[0,1,2].map(()=>{const d=rnd(10);return ''+d+d}).join('');
+  }else{
+    const pool=rd(Math.random()<0.5?2:3);s='';
+    for(let i=0;i<7;i++)s+=pool[rnd(pool.length)];
+  }
+  return s;
+}
+
+function score(s){
+  let sc=0,run=1,mx=1;
+  for(let i=1;i<7;i++){run=s[i]==s[i-1]?run+1:1;mx=Math.max(mx,run)}
+  sc+=[0,0,0,8,25,60,120,250][mx];
+  let z=0;for(let i=6;i>=0&&s[i]=='0';i--)z++;
+  sc+=z>=4?120:z==3?50:z==2?15:0;
+  const u=new Set(s).size;
+  sc+=u==2?80:u==3?30:u==4?10:0;
+  let best=1;
+  for(let i=0;i<7;i++)for(const d of[1,-1]){let l=1;while(i+l<7&&+s[i+l]==+s[i+l-1]+d)l++;best=Math.max(best,l)}
+  sc+=[0,0,0,0,25,60,120,250][best];
+  if(s==rev(s))sc+=90;else if(s.slice(3)==rev(s.slice(3)))sc+=10;
+  const t=s.slice(1);
+  if(t[0]==t[1]&&t[2]==t[3]&&t[4]==t[5])sc+=20;
+  if(t.slice(0,2)==t.slice(2,4)&&t.slice(2,4)==t.slice(4,6)&&t[0]!=t[1])sc+=40;
+  return sc;
+}
+function calcPrice(sc,m){
+  const base=50+Math.pow(sc,1.5)*12;
+  return Math.max(10,Math.round(base*m*(0.9+Math.random()*0.2)/10)*10);
+}
+const money=v=>v.toLocaleString('ru-RU')+' ₽';
+const fmt=(c,s)=>'+7 ('+c+') '+s.slice(0,3)+'-'+s.slice(3,5)+'-'+s.slice(5);
+
+let S={bal:1000,cat:[],gen:0,sold:0,id:1};
+try{const r=localStorage.getItem('tvvh_v1');if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const save=()=>{try{localStorage.setItem('tvvh_v1',JSON.stringify(S))}catch(e){}};
+let cur=null,lim=50,armed=null;
+
+function badges(it){
+  const r=RAR[rarIdx(it.sc)],o=OPS[it.op];
+  return '<span class="badge" style="background:'+o.c+'22;color:'+o.c+'">'+it.op+'</span>'+
+         '<span class="badge" style="background:'+r[2]+'22;color:'+r[2]+'">'+r[1]+' · '+it.sc+'</span>';
+}
+
+function gen(){
+  const op=OPK[rnd(OPK.length)],o=OPS[op],s=makeSub(),sc=score(s);
+  cur={code:o.codes[rnd(o.codes.length)],s,op,sc,price:calcPrice(sc,o.m)};
+  S.gen++;save();render();
+}
+function toCat(){
+  if(!cur)return;
+  cur.id=S.id++;S.cat.push(cur);cur=null;save();render();
+}
+function sellCur(){
+  if(!cur)return;
+  S.bal+=cur.price;S.sold++;cur=null;save();render();
+}
+function sell(id){
+  const i=S.cat.findIndex(x=>x.id===id);if(i<0)return;
+  if(rarIdx(S.cat[i].sc)>=3&&armed!==id){armed=id;renderCat();return}
+  armed=null;
+  S.bal+=S.cat[i].price;S.sold++;S.cat.splice(i,1);save();render();
+}
+function sellCommon(){
+  let g=0,n=0;
+  S.cat=S.cat.filter(x=>{if(x.sc<8){g+=x.price;n++;return false}return true});
+  S.bal+=g;S.sold+=n;save();render();
+}
+
+function render(){
+  $('bal').textContent=money(S.bal);
+  $('sg').textContent=S.gen;$('ss').textContent=S.sold;$('sc').textContent=S.cat.length;
+  const c=$('card');
+  if(!cur){
+    c.style.borderColor='#2a2a3d';
+    c.innerHTML='<div class="sub">Нажми «Генерировать»,<br>чтобы получить номер</div><div class="num" style="color:#444">+7 (9••) •••-••-••</div>';
+    $('acts').classList.add('hide');
+  }else{
+    const r=RAR[rarIdx(cur.sc)];
+    c.style.borderColor=r[2];
+    c.innerHTML='<div>'+badges(cur)+'</div><div class="num">'+fmt(cur.code,cur.s)+'</div>'+
+      '<div class="sub">Оценка редкости: '+cur.sc+'</div><div class="price">'+money(cur.price)+'</div>';
+    $('acts').classList.remove('hide');
+  }
+  renderCat();
+}
+
+function renderCat(){
+  let a=S.cat.slice();
+  const m=$('sort').value;
+  if(m=='new')a.reverse();
+  else if(m=='price')a.sort((x,y)=>y.price-x.price);
+  else a.sort((x,y)=>y.sc-x.sc);
+  $('cv').textContent=money(S.cat.reduce((t,x)=>t+x.price,0));
+  const show=a.slice(0,lim);
+  $('list').innerHTML=a.length?show.map(it=>{
+    const col=RAR[rarIdx(it.sc)][2];
+    return '<div class="item" style="border-left-color:'+col+'">'+
+      '<div class="n">'+fmt(it.code,it.s)+'</div><div>'+badges(it)+'</div>'+
+      '<div class="row"><div class="price" style="font-size:18px;margin:0">'+money(it.price)+'</div></div>'+
+      '<button class="btn g" onclick="sell('+it.id+')">'+(armed===it.id?'Точно продать?':'Продать')+'</button></div>';
+  }).join(''):'<div class="empty">Каталог пуст</div>';
+  $('more').classList.toggle('hide',a.length<=lim);
+}
+
+function tab(n){
+  $('p1').classList.toggle('hide',n!=1);$('p2').classList.toggle('hide',n!=2);
+  $('t1').classList.toggle('on',n==1);$('t2').classList.toggle('on',n==2);
+  armed=null;renderCat();
+}
+render();
+</script>
+</body>
+</html>
